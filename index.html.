@@ -1,0 +1,164 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080d19">
+<title>Aiko Companion</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080d19;color:#e8f5ff;
+font:16px system-ui;text-align:center;padding:28px 18px}
+h1{letter-spacing:5px;margin-top:30px}
+p{color:#9eb5ca}
+#orb{width:150px;height:150px;border-radius:50%;
+margin:38px auto;background:radial-gradient(circle,#7cecff,#12618a 45%,#101a35 72%);
+box-shadow:0 0 45px #087ca966}
+button,select,input{padding:13px;border-radius:12px;
+border:1px solid #25425e;background:#111e32;color:white;
+margin:5px;max-width:100%}
+button{cursor:pointer}
+#talk{background:#087ca9}
+#status{min-height:28px;color:#7cecff}
+#log{max-width:500px;margin:20px auto;text-align:left;
+white-space:pre-wrap;overflow-wrap:anywhere}
+.panel{max-width:500px;margin:18px auto;padding:14px;
+border:1px solid #1e334b;border-radius:16px}
+</style>
+</head>
+<body>
+<h1>AIKO</h1>
+<p>Your voice companion · Prototype 01</p>
+<div id="orb"></div>
+<div id="status">Ready when you are.</div>
+<button id="talk">🎙 Start talking</button>
+<button id="stop">End conversation</button>
+
+<div id="log" aria-live="polite"></div>
+
+<div class="panel">
+  <p>Choose a recognition language</p>
+  <select id="lang">
+    <option value="en-US">English</option>
+    <option value="ja-JP">Japanese</option>
+  </select>
+  <p>Memory (saved on this device)</p>
+  <input id="memory" placeholder="A preference to remember">
+  <button id="save">Save memory</button>
+  <button id="clear">Delete memory</button>
+  <p id="saved"></p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const Recognition = window.SpeechRecognition ||
+                    window.webkitSpeechRecognition;
+let rec, active = false, voices = [];
+
+function loadVoices(){
+  voices = speechSynthesis.getVoices();
+}
+loadVoices();
+speechSynthesis.onvoiceschanged = loadVoices;
+
+function say(text){
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.94;
+  u.pitch = 1.04;
+  const english = voices.filter(v => v.lang.startsWith("en"));
+  const preferred = english.find(v =>
+    /female|samantha|aria|jenny|zira/i.test(v.name));
+  if(preferred) u.voice = preferred;
+  speechSynthesis.speak(u);
+}
+
+function show(who,text){
+  $("log").textContent += who + ": " + text + "\n\n";
+}
+
+function reply(text){
+  const t = text.toLowerCase();
+  const memory = localStorage.getItem("aikoMemory");
+  let answer;
+
+  if(/hello|hi\b|hey/.test(t)){
+    answer = "Hi. I'm Aiko. How has your day been?";
+  } else if(/your name/.test(t)){
+    answer = "I'm Aiko, your voice companion.";
+  } else if(/remember/.test(t) && memory){
+    answer = "Your saved memory says: " + memory;
+  } else if(/how are you/.test(t)){
+    answer = "I'm ready to talk with you. What's on your mind?";
+  } else if(/bye|goodbye/.test(t)){
+    answer = "Talk to you next time. Take care.";
+  } else {
+    answer = "I heard you say: " + text +
+      ". My real AI brain isn't connected yet.";
+  }
+
+  show("Aiko",answer);
+  say(answer);
+}
+
+function start(){
+  if(!Recognition){
+    $("status").textContent =
+      "Speech recognition isn't supported here. Try Chrome.";
+    return;
+  }
+  if(!rec){
+    rec = new Recognition();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onresult = e => {
+      const text = e.results[0][0].transcript;
+      show("You",text);
+      reply(text);
+    };
+    rec.onerror = e => {
+      $("status").textContent = "Voice error: " + e.error;
+    };
+    rec.onend = () => {
+      if(active){
+        $("status").textContent = "Listening again...";
+        try { rec.start(); } catch {}
+      } else {
+        $("status").textContent = "Ready when you are.";
+      }
+    };
+  }
+  rec.lang = $("lang").value;
+  active = true;
+  $("status").textContent = "Listening...";
+  try { rec.start(); } catch {}
+}
+
+$("talk").onclick = () => {
+  if(active){
+    active = false;
+    try { rec.stop(); } catch {}
+    $("status").textContent = "Paused.";
+  } else start();
+};
+$("stop").onclick = () => {
+  active = false;
+  if(rec) try { rec.stop(); } catch {}
+  speechSynthesis.cancel();
+  $("status").textContent = "Conversation ended.";
+};
+
+$("save").onclick = () => {
+  const value = $("memory").value.trim();
+  if(!value) return;
+  localStorage.setItem("aikoMemory",value);
+  $("saved").textContent = "Memory saved on this device.";
+  $("memory").value = "";
+};
+$("clear").onclick = () => {
+  localStorage.removeItem("aikoMemory");
+  $("saved").textContent = "Saved memory deleted.";
+};
+</script>
+</body>
+</html>
